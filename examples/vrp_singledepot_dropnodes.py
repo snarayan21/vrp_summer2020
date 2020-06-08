@@ -31,15 +31,8 @@ def create_data_model(num_nodes, num_vehicles):
             y2 = data['y'][j]
             dist_mat[i][j] = getdist(x1,y1,x2,y2)
     
-    #distance between depots set to 0
-    #dist_mat[0:num_vehicles][0:num_vehicles] = 0
-    
     data['distance_matrix'] = dist_mat.tolist()
     data['num_vehicles'] = num_vehicles
-    
-    #if setting start and end depots
-    #data['starts'] = np.random.randint(low=0,high=num_nodes,size=num_vehicles).tolist()
-    #data['ends'] = [0 for i in range(num_vehicles)]
     data['depot'] = 0
     
     del dist_mat
@@ -52,7 +45,7 @@ def print_solution(data, manager, routing, solution):
     max_route_distance = 0
     for vehicle_id in range(data['num_vehicles']):
         index = routing.Start(vehicle_id)
-        plan_output = 'Route for vehicle {}:\n'.format(vehicle_id)
+        plan_output = 'Route for vehicle {}:\n'.format(vehicle_id + 1)
         route_distance = 0
         while not routing.IsEnd(index):
             plan_output += ' {} -> '.format(manager.IndexToNode(index))
@@ -70,8 +63,6 @@ def print_solution(data, manager, routing, solution):
 def graph_solution(data, manager, routing, solution):
     max_route_distance = 0
     plt.plot(data['x'],data['y'],'ko',markersize=10)
-    #if setting start and end points
-    plt.plot(data['x'][data['starts']],data['y'][data['starts']],'kD',markersize=10)
     cmap = plt.get_cmap('gist_rainbow')
     colors = [cmap(i) for i in np.linspace(0,1,data['num_vehicles'])]
     legendlines = []
@@ -104,7 +95,7 @@ def main():
     data = create_data_model(sys.argv[1], sys.argv[2])
 
     # Create the routing index manager.
-    manager = pywrapcp.RoutingIndexManager(len(data['distance_matrix']),data['num_vehicles'],data['starts'],data['ends'])
+    manager = pywrapcp.RoutingIndexManager(len(data['distance_matrix']),data['num_vehicles'],data['depot'])
     # Create Routing Model.
     routing = pywrapcp.RoutingModel(manager)
 

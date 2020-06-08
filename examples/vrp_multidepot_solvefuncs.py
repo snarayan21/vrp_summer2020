@@ -8,9 +8,9 @@ import matplotlib.pyplot as plt
 import sys
 
 
-
+"""
 def create_data_model(num_nodes, num_vehicles):
-    """Stores the data for the problem."""
+    #Stores the data for the problem.
     num_nodes = int(num_nodes)
     num_vehicles = int(num_vehicles)
     
@@ -31,28 +31,21 @@ def create_data_model(num_nodes, num_vehicles):
             y2 = data['y'][j]
             dist_mat[i][j] = getdist(x1,y1,x2,y2)
     
-    #distance between depots set to 0
-    #dist_mat[0:num_vehicles][0:num_vehicles] = 0
-    
     data['distance_matrix'] = dist_mat.tolist()
     data['num_vehicles'] = num_vehicles
-    
-    #if setting start and end depots
-    #data['starts'] = np.random.randint(low=0,high=num_nodes,size=num_vehicles).tolist()
-    #data['ends'] = [0 for i in range(num_vehicles)]
     data['depot'] = 0
     
     del dist_mat
     
     return data
-
-
+"""
+"""
 def print_solution(data, manager, routing, solution):
-    """Prints solution on console."""
+    #Prints solution on console.
     max_route_distance = 0
     for vehicle_id in range(data['num_vehicles']):
         index = routing.Start(vehicle_id)
-        plan_output = 'Route for vehicle {}:\n'.format(vehicle_id)
+        plan_output = 'Route for vehicle {}:\n'.format(vehicle_id + 1)
         route_distance = 0
         while not routing.IsEnd(index):
             plan_output += ' {} -> '.format(manager.IndexToNode(index))
@@ -70,8 +63,6 @@ def print_solution(data, manager, routing, solution):
 def graph_solution(data, manager, routing, solution):
     max_route_distance = 0
     plt.plot(data['x'],data['y'],'ko',markersize=10)
-    #if setting start and end points
-    plt.plot(data['x'][data['starts']],data['y'][data['starts']],'kD',markersize=10)
     cmap = plt.get_cmap('gist_rainbow')
     colors = [cmap(i) for i in np.linspace(0,1,data['num_vehicles'])]
     legendlines = []
@@ -92,19 +83,13 @@ def graph_solution(data, manager, routing, solution):
      
     plt.legend(handles=legendlines, labels=['Vehicle {i}'.format(i=(vehicle_id+1)) for vehicle_id in range(data['num_vehicles'])], loc='best')
     plt.show()
+"""
 
-
-def main():
+def solve(data):
     """Solve the CVRP problem."""
-    if len(sys.argv) != 3:
-        print('Should be called as follows: python vrp_multipledepots.py [number of nodes] [number of vehicles]')
-        return
-        
-    # Instantiate the data problem.
-    data = create_data_model(sys.argv[1], sys.argv[2])
 
     # Create the routing index manager.
-    manager = pywrapcp.RoutingIndexManager(len(data['distance_matrix']),data['num_vehicles'],data['starts'],data['ends'])
+    manager = pywrapcp.RoutingIndexManager(len(data['distance_matrix']),data['num_vehicles'],data['depot'])
     # Create Routing Model.
     routing = pywrapcp.RoutingModel(manager)
 
@@ -127,7 +112,7 @@ def main():
     routing.AddDimension(
         transit_callback_index,
         0,  # no slack
-        90,  # vehicle maximum travel distance
+        data['max_distance'],  # vehicle maximum travel distance
         True,  # start cumul to zero
         dimension_name)
     distance_dimension = routing.GetDimensionOrDie(dimension_name)
@@ -148,12 +133,7 @@ def main():
 
     # Print solution on console.
     if solution:
-        print_solution(data, manager, routing, solution)
-        graph_solution(data, manager, routing, solution)
+        return manager, routing, solution
     
     else:
-        print("No Solution Found.")
-
-
-if __name__ == '__main__':
-    main()
+        return None, None, None
