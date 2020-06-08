@@ -61,9 +61,13 @@ def print_solution(data, manager, routing, solution):
     print('Maximum of the route distances: {}m'.format(max_route_distance))
 
 #graphs solution using matplotlib
-def graph_solution(data, manager, routing, solution, currdepot):
+def graph_solution(data, manager, routing, solution, visited_nodes, currdepot):
     max_route_distance = 0
     plt.plot(data['x'],data['y'],'ko',markersize=10)
+    
+    for nodedex in visited_nodes:
+        plt.plot(data['x'][nodedex],data['y'][nodedex],'go',markersize=10)
+        
     plt.plot(data['x'][0],data['y'][0],'bD',markersize=10)
     plt.xlim(0 - data['bound_length']*0.1,data['bound_length']*1.1)
     plt.ylim(0 - data['bound_length']*0.1,data['bound_length']*1.1)
@@ -177,7 +181,7 @@ def main():
         #marginal utility of first vehicle is total nodes it finds minus previously found nodes, which is none
         marginal_utility = total_visited - prev_total_visited
         
-        while((marginal_utility >= prev_marginal_utility) or (manager == None)):
+        while((marginal_utility >= prev_marginal_utility) and (manager != None)):
             prev_marginal_utility = marginal_utility
             prev_total_visited = total_visited
             prev_visited_nodes = visited_nodes
@@ -198,7 +202,7 @@ def main():
         
         print("Depot Number:", currdepot, " Number of vehicles:", data['num_vehicles'])
         
-        graph_solution(data, prevmanager, prevrouting, prevsolution, currdepot)
+        graph_solution(data, prevmanager, prevrouting, prevsolution, prev_visited_nodes, currdepot)
         
         #delete visited node coordinates in DESCENDING ORDER and increment currdepot since this depot has been completed
         #sort the visited nodes in descending order, so deletions happen from outermost to inner and don't change inner indices
