@@ -15,7 +15,7 @@ def create_data_model():
     data['x'],data['y'] = np.random.randint(low=0,high=1000,size=(2,25));
     
     def getdist(x1, y1, x2, y2):
-        return np.sqrt((abs(x1-x2)^2) + (abs(y1-y2)^2))
+        return np.sqrt((abs(x1-x2)**2) + (abs(y1-y2)**2))
         
     #return euclidean distance matrix
     dist_mat = []

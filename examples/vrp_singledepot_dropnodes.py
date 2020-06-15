@@ -19,7 +19,7 @@ def create_data_model(num_nodes, num_vehicles):
     data['penalty'] = int(np.sqrt(2)*(1000)*num_nodes)
     
     def getdist(x1, y1, x2, y2):
-        return np.sqrt((abs(x1-x2)^2) + (abs(y1-y2)^2))
+        return np.sqrt((abs(x1-x2)**2) + (abs(y1-y2)**2))
         
     #return euclidean distance matrix
     dist_mat = np.zeros((num_nodes, num_nodes))
@@ -82,6 +82,9 @@ def graph_solution(data, manager, routing, solution):
             max_route_distance = max(route_distance, max_route_distance)
      
     plt.legend(handles=legendlines, labels=['Vehicle {i}'.format(i=(vehicle_id+1)) for vehicle_id in range(data['num_vehicles'])], loc='best')
+    
+    imagename = "singledepot_dropnodes_solution.png"
+    #plt.savefig(imagename)
     plt.show()
 
 
@@ -118,11 +121,11 @@ def main():
     routing.AddDimension(
         transit_callback_index,
         0,  # no slack
-        90,  # vehicle maximum travel distance
+        1000,  # vehicle maximum travel distance
         True,  # start cumul to zero
         dimension_name)
     distance_dimension = routing.GetDimensionOrDie(dimension_name)
-    distance_dimension.SetGlobalSpanCostCoefficient(100)
+    #distance_dimension.SetGlobalSpanCostCoefficient(100)
     
     #allow drops
     penalty = data['penalty']
