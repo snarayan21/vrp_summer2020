@@ -9,32 +9,40 @@ import sys
 import matplotlib
 
 
+def circle_points(r, n):
+    t = np.linspace(0, 2*np.pi, n)
+    x = r * np.cos(t)
+    y = r * np.sin(t)
+    return x.tolist(), y.tolist()
 
 def create_data_model():
     """Stores the data for the problem."""
     data = {}
-    data['x'],data['y'] = np.random.randint(low=0,high=1000,size=(2,25));
     
-    def getdist(x1, y1, x2, y2):
-        return np.sqrt((abs(x1-x2)**2) + (abs(y1-y2)**2))
-        
-    #return euclidean distance matrix
-    dist_mat = []
-    for i in range(25):
-        row = []
-        x1 = data['x'][i]
-        y1 = data['y'][i]
-        for j in range(25):
-            x2 = data['x'][j]
-            y2 = data['y'][j]
-            row.append(getdist(x1,y1,x2,y2))
-        dist_mat.append(row)
-        
-    data['distance_matrix'] = dist_mat;
-    data['num_vehicles'] = 4
+    data['x'], data['y'] = circle_points(10, 6)
+    
+    """
+    data['distance_matrix'] = [
+    [0, 1, 0, 3, 4, 5],
+    [1, 0, 1, 2, 3, 0],
+    [0, 1, 0, 1, 2, 3],
+    [3, 2, 1, 0, 0, 2],
+    [4, 3, 2, 0, 0, 1],
+    [5, 0, 3, 2, 1, 0]
+    ]
+    """
+    
+    data['distance_matrix'] = [
+    [0, 10, 20, 30, 40, 0],
+    [10, 0, 10, 20, 0, 40],
+    [20, 10, 0, 0, 20, 30],
+    [30, 20, 0, 0, 10, 20],
+    [40, 0, 20, 10, 0, 10],
+    [0, 40, 30, 20, 10, 0]
+    ]
+    
+    data['num_vehicles'] = 1
     data['depot'] = 0
-    
-    del dist_mat
     
     return data
 
@@ -85,8 +93,8 @@ def graph_solution(data, manager, routing, solution):
                 legendlines.append(newline)
             max_route_distance = max(route_distance, max_route_distance)
     plt.legend(handles=legendlines, labels=['Vehicle {i}'.format(i=(vehicle_id+1)) for vehicle_id in range(data['num_vehicles'])], loc='best')
-    imagename = "simple_vrp_solution.png"
-    plt.savefig(imagename, dpi=dpi)
+    #imagename = "simple_vrp_solution.png"
+    #plt.savefig(imagename, dpi=dpi)
     plt.show()
     plt.clf()
 
@@ -105,7 +113,7 @@ def main():
     # Instantiate the data problem.
     data = create_data_model()
     
-    graph_nodemap(data)
+    #graph_nodemap(data)
 
     # Create the routing index manager.
     manager = pywrapcp.RoutingIndexManager(len(data['distance_matrix']),
@@ -137,7 +145,7 @@ def main():
         True,  # start cumul to zero
         dimension_name)
     distance_dimension = routing.GetDimensionOrDie(dimension_name)
-    distance_dimension.SetGlobalSpanCostCoefficient(100)
+    #distance_dimension.SetGlobalSpanCostCoefficient(100)
 
     # Setting first solution heuristic.
     search_parameters = pywrapcp.DefaultRoutingSearchParameters()
@@ -149,7 +157,8 @@ def main():
 
     # Print solution on console.
     if solution:
-        graph_solution(data, manager, routing, solution)
+        print_solution(data, manager, routing, solution)
+        #graph_solution(data, manager, routing, solution)
 
 
 if __name__ == '__main__':

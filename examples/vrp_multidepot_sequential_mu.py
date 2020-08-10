@@ -96,26 +96,38 @@ def graph_solution(data, manager, routing, solution, visited_nodes, currdepot):
     imagename = "Depot_{i}_solution_mu.png".format(i=currdepot)
     #plt.savefig(imagename)
 
-#gets number of total visited nodes, and identities of those nodes to be removed for a particular solution
+#gets number of total visited nodes, and identities of those nodes to be removed for a particular solution   
 def get_visited(data, manager, routing, solution):
     total_visited = 0
     visited_nodes = []
+    num_trips = 0
+    
     for vehicle_id in range(data['num_vehicles']):
         index = routing.Start(vehicle_id)
+        startdex = manager.IndexToNode(index)
         vehicle_visited = 0
         vehicle_nodes = []
+        
+        if(not(routing.IsEnd(index))):
+            nodex = manager.IndexToNode(index)
+            nextdex = manager.IndexToNode(solution.Value(routing.NextVar(index)))
+            if(nodex != nextdex):
+                num_trips += 1
+            
         while not routing.IsEnd(index):
             nodex = manager.IndexToNode(index)
-            if(nodex != 0):
+            nextdex = solution.Value(routing.NextVar(index))
+            nextnodedex = manager.IndexToNode(nextdex)
+            if(nodex != nextnodedex and not(routing.IsEnd(nextdex))):
                 vehicle_visited += 1
-                vehicle_nodes.append(nodex)
+                vehicle_nodes.append(nextnodedex)
             previous_index = index
-            index = solution.Value(routing.NextVar(index))
+            index = solution.Value(routing.NextVar(index))       
             
         total_visited += vehicle_visited
         visited_nodes = visited_nodes + vehicle_nodes
     
-    return total_visited, visited_nodes
+    return total_visited, visited_nodes, num_trips
 
 #returns euclidean distance between two points
 def getdist(x1, y1, x2, y2):
@@ -179,12 +191,13 @@ def main():
         #another while loop to find the number of vehicles that maximizes the marginal utility of drones
         prev_marginal_utility = 0
         prev_total_visited = 0
+        prev_num_trips = 0
         prev_visited_nodes = None
         prevmanager = None
         prevrouting = None
         prevsolution = None
         manager, routing, solution = vrp.solve(data)
-        total_visited, visited_nodes = get_visited(data, manager, routing, solution)
+        total_visited, visited_nodes, num_trips = get_visited(data, manager, routing, solution)
         #marginal utility of first vehicle is total nodes it finds minus previously found nodes, which is none
         marginal_utility = total_visited - prev_total_visited
                 
@@ -192,6 +205,7 @@ def main():
             prev_marginal_utility = marginal_utility
             prev_total_visited = total_visited
             prev_visited_nodes = visited_nodes
+            prev_num_trips = num_trips
             #print(*prev_visited_nodes)
             prevmanager = manager
             prevrouting = routing
@@ -199,7 +213,7 @@ def main():
             #increase number of vehicles by 1
             data['num_vehicles'] = data['num_vehicles'] + 1
             manager, routing, solution = vrp.solve(data)
-            total_visited, visited_nodes = get_visited(data, manager, routing, solution)
+            total_visited, visited_nodes, num_trips = get_visited(data, manager, routing, solution)
             marginal_utility = total_visited - prev_total_visited
         
         #update total_vehicles if num_vehicles - 1 (since we checked one vehicle above the optimal) > total_vehicles

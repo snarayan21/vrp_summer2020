@@ -8,6 +8,7 @@ import matplotlib.pyplot as plt
 import sys
 import vrp_multidepot_solvefuncs as vrp
 import pdb
+import math
 
 
 """
@@ -42,6 +43,7 @@ def create_data_model(num_nodes, num_vehicles):
 """
 
 def get_max_dist(data, manager, routing, solution):
+    """Prints solution on console."""
     max_route_distance = 0.0
     cost = 0.0
     for vehicle_id in range(data['num_vehicles']):
@@ -62,9 +64,8 @@ def get_max_dist(data, manager, routing, solution):
     #print('Maximum of the route distances: {}m'.format(max_route_distance))
     return max_route_distance, cost
 
-
 #graphs solution using matplotlib
-def graph_solution(data, manager, routing, solution, visited_nodes, marginal_utilities, total_utilities, nodes_per_trip, costs):
+def graph_solution(data, manager, routing, solution, visited_nodes, nodes_per_trip, max_dists, costs):
     dpi = 192
     plt.figure(figsize=(2000/dpi, 1000/dpi))
     max_route_distance = 0
@@ -104,18 +105,17 @@ def graph_solution(data, manager, routing, solution, visited_nodes, marginal_uti
     plt.legend(handles=legendlines, labels=['Vehicle {i}'.format(i=(vehicle_id+1)) for vehicle_id in range(data['num_vehicles_depot'])], loc='best', prop={'size': 8})
     
     plt.subplot(1,2,2)
-    plt.plot([i+1 for i in range(data['num_vehicles_depot'])], marginal_utilities, 'ro-', markersize = 5)
-    plt.plot([i+1 for i in range(data['num_vehicles_depot'])], total_utilities, 'ko-', markersize = 5)
+    #plt.plot([i+1 for i in range(data['num_vehicles_depot'])], marginal_utilities, 'ro-', markersize = 5)
+    plt.plot([i+1 for i in range(data['num_vehicles_depot'])], max_dists, 'ko-', markersize = 5)
     plt.plot([i+1 for i in range(data['num_vehicles_depot'])], nodes_per_trip, 'bo-', markersize = 5)
     plt.plot([i+1 for i in range(data['num_vehicles_depot'])], costs, 'go-', markersize = 5)
     plt.xlim(0,data['num_vehicles_depot'] + 1)
-    plt.ylim(0, max(max(total_utilities), max(nodes_per_trip), max(costs))*1.1)
-    plt.legend(labels=['Marginal Visited Nodes', 'Total Visited Nodes', 'Visited Nodes Per Trip', 'Solution Cost (/100)'], loc='best', prop={'size': 8})
-
-    imagename = "{i}_vehicle_solution_tu.png".format(i=data['num_vehicles_depot'])
+    plt.ylim(0, max(max(max_dists), max(nodes_per_trip), costs[0])*1.1)
+    plt.legend(labels=['Maximum Vehicle Distance', 'Visited Nodes Per Trip', 'Solution Cost (/100)'], loc='best', prop={'size': 8})
+    
+    imagename = "{i}_vehicle_solution_nodistlim.png".format(i=data['num_vehicles_depot'])
     plt.savefig(imagename, dpi=dpi)
     plt.show()
-    
 
 #gets number of total visited nodes, and identities of those nodes to be removed for a particular solution
 def get_visited(data, manager, routing, solution):
@@ -158,7 +158,6 @@ def get_visited(data, manager, routing, solution):
         
     return total_visited, visited_nodes, num_trips, max(used_vehicles)
 
-
 #returns euclidean distance between two points
 def getdist(x1, y1, x2, y2):
     return np.sqrt(((abs(x1-x2))**2) + ((abs(y1-y2))**2))
@@ -177,27 +176,25 @@ def get_dist_mat(data,num_nodes):
     return dist_mat.tolist()
 
 
-def multidepot_tu(dens, num_dpts, distlim, xcoords, ycoords, dptcoords):
-    """Solve the CVRP problem."""
-    
-    print("Solving for optimal number of vehicles in 100x100 square area based on total utility of next vehicle.\n")
+#external function call
+def multidepot_nodistlim(dens, num_dpts, xcoords, ycoords, dptcoords):
+
+    print("Solving for optimal number of vehicles in 100x100 square area based on max distance traveled by any one vehicle.\n")
     
     density = float(dens)
     bound_length = 100
     num_depots = int(num_dpts)
     num_nodes = int((bound_length*bound_length)*density) + num_depots
-    max_distance = int(distlim)
     
-    #create depot coordinates along the line y=x in the square region
+    #put depot coords in data dictionary
     depotcoords = dptcoords
     
-    #create data for problem
+    #put coords in data dictionary
     data = {}
     data['x'] = xcoords
     data['y'] = ycoords
     
     #put params in data
-    data['max_distance'] = max_distance
     data['bound_length'] = bound_length
     data['num_nodes'] = num_nodes
     data['num_depots'] = num_depots
@@ -209,9 +206,6 @@ def multidepot_tu(dens, num_dpts, distlim, xcoords, ycoords, dptcoords):
         
     #construct distance matrix based on current depot
     data['distance_matrix'] = vrp.get_dist_mat(data,data['num_nodes'])
-
-    #make penalty of each node larger than the maximum possible total sum of distances
-    data['penalty'] = int(np.sqrt(2)*(bound_length)*num_nodes)
     
     #assign vehicles starts and ends num_vehicles at a time, start with 1 vehicle per node
     data['starts'] = [i for i in range(num_depots)]
@@ -219,16 +213,22 @@ def multidepot_tu(dens, num_dpts, distlim, xcoords, ycoords, dptcoords):
     
     #initial number of vehicles is the same as number of depots (1 vehicle per depot)
     data['num_vehicles'] = num_depots
+    
     #num_vehicles_depot is number of vehicles per depot
     data['num_vehicles_depot'] = 1
     
-    marginal_utilities = []
-    total_utilities = []
+    #make penalty of each node larger than the maximum possible total sum of distances, divided by number of vehicles per depot
+    data['penalty'] = math.ceil(np.sqrt(2)*(bound_length)*num_nodes)
+    
+    #marginal_utilities = []
+    #total_utilities = []
     nodes_per_trip = []
+    max_dists = []
     costs = []
             
     #while loop to find the number of vehicles that maximizes the total utility of drones (nodes visited)
-    prev_max_dist = 0
+    #set prev_max_dist to max possible value since we cannot have a max dist higher than the "penalty"
+    prev_max_dist = data['penalty']
     prev_total_visited = 0
     prev_total_trips = 0
     prev_cost = 0
@@ -237,19 +237,21 @@ def multidepot_tu(dens, num_dpts, distlim, xcoords, ycoords, dptcoords):
     prevrouting = None
     prevsolution = None
     used_vehicles = 1
-    manager, routing, solution = vrp.solvemulti(data)
+    manager, routing, solution = vrp.solvemulti_nodistlim(data)
     if(routing == None):
-        print("solution not found...")
+        print("solution not found...\n")
         return None
     total_visited, visited_nodes, total_trips, new_used_vehicles = vrp.get_visited(data, manager, routing, solution)
     max_dist, cost = vrp.get_max_dist(data, manager, routing, solution)
-    total_utilities.append(total_visited)
-    marginal_utilities.append(total_visited - prev_total_visited)
-    nodes_per_trip.append((float(total_visited))/total_trips)
-    costs.append(cost)   
-            
-    while((total_visited > prev_total_visited)):
-    #while(total_visited < num_nodes - num_depots):
+    #total_utilities.append(total_visited)
+    #marginal_utilities.append(total_visited - prev_total_visited)
+    nodes_per_trip.append((float(total_visited))/total_trips) 
+    max_dists.append(max_dist)
+    costs.append((cost+(1000*max_dist))/1000.0)
+       
+    itervar = 0         
+    while((max_dist < prev_max_dist)):
+    #while(itervar < 10):
         prev_total_visited = total_visited
         prev_visited_nodes = visited_nodes
         prev_total_trips = total_trips
@@ -263,7 +265,7 @@ def multidepot_tu(dens, num_dpts, distlim, xcoords, ycoords, dptcoords):
         if(new_used_vehicles > used_vehicles):
             used_vehicles = new_used_vehicles
         
-        print("Total Cost of Solution:", cost)
+        print("Total Cost of Solution:", cost+(1000*max_dist))
         print("Total Number of Vehicles Available Per Depot:", data['num_vehicles_depot'])
         print("Total Number of Vehicles Needed:", used_vehicles)
         print("Max Distance Traveled by any Vehicle:", max_dist)
@@ -271,160 +273,12 @@ def multidepot_tu(dens, num_dpts, distlim, xcoords, ycoords, dptcoords):
         print("Total Number of Trips", total_trips)
         print("Number of nodes visited per trip:", nodes_per_trip[-1], "\n")
         
-        graph_solution(data, prevmanager, prevrouting, prevsolution, prev_visited_nodes, marginal_utilities, total_utilities, nodes_per_trip, costs)
+        graph_solution(data, prevmanager, prevrouting, prevsolution, prev_visited_nodes, nodes_per_trip, max_dists, costs)
  
         #increase number of vehicles PER DEPOT by 1, reflect change in total number of vehicles
         data['num_vehicles'] = data['num_vehicles'] + num_depots
-        data['num_vehicles_depot'] += 1
-        
-        #modify starts and ends to reflect the larger number of vehicles
-        newstarts = []
-        newends = []
-        
-        for i in range(num_depots):
-            for j in range(data['num_vehicles_depot']):
-                newstarts.append(i)
-                newends.append(i)
-        
-        data['starts'] = newstarts
-        data['ends'] = newends
-        
-        del newstarts
-        del newends
-        
-        manager, routing, solution = vrp.solvemulti(data)
-        if(routing == None):
-            print("solution not found...")
-            break
-        total_visited, visited_nodes, total_trips, new_used_vehicles = vrp.get_visited(data, manager, routing, solution) 
-        max_dist, cost = vrp.get_max_dist(data, manager, routing, solution)
-        total_utilities.append(total_visited)
-        marginal_utilities.append(total_visited - prev_total_visited)
-        nodes_per_trip.append((float(total_visited))/total_trips)
-        costs.append((cost+(100*max_dist))/100.0)         
-         
-    #since we checked one vehicle above the optimal, best solution # of vehicles is 1 less than current.
-    data['num_vehicles_depot'] = data['num_vehicles_depot'] - 1
-    data['num_vehicles'] = data['num_vehicles'] - num_depots
-        
-    total_nodes_visited = prev_total_visited
-    total_trips = prev_total_trips
-    total_vehicles = data['num_vehicles_depot']
-    max_dist = prev_max_dist
-    used_vehicles = max(used_vehicles, new_used_vehicles)
-                
-    #plt.plot(data['x'],data['y'],'ko',markersize=10)
-    #plt.show()
-    #pdb.set_trace()
-      
-    print("Total Cost of Overall Solution:", cost) 
-    print("Overall Total Number of Vehicles Available Per Depot:", total_vehicles)
-    print("Overall Total Number of Vehicles Needed:", used_vehicles)
-    print("Final Max Distance Traveled by any Vehicle:", max_dist)
-    print("Overall Max Possible Number of Vehicle Trips:", data['num_vehicles'])
-    print("Overall Total Number of Trips", total_trips)
-    print("Overall number of nodes visited per vehicle trip:", (float(total_nodes_visited))/total_trips)
-
-#function called from command line
-def main():
-    """Solve the CVRP problem."""
-    if len(sys.argv) != 4:
-        print('Should be called as follows: python vrp_multipledepots.py [density of nodes per unit^2] [number of depots to approximate diagonal road] [range of drone on a single charge]')
-        return
-    
-    print("Solving for optimal number of vehicles in 100x100 square area based on total utility of next vehicle.\n")
-    
-    density = float(sys.argv[1])
-    bound_length = 100
-    num_depots = int(sys.argv[2])
-    num_nodes = int((bound_length*bound_length)*density) + num_depots
-    max_distance = int(sys.argv[3])
-    
-    #create depot coordinates along the line y=x in the square region
-    depotcoords = np.linspace(0, bound_length, num_depots, dtype = 'int32').tolist()
-    
-    #create data for problem
-    data = {}
-    data['x'] = np.random.randint(low=0,high=bound_length,size=num_nodes).tolist()
-    data['y'] = np.random.randint(low=0,high=bound_length,size=num_nodes).tolist()
-    
-    #put params in data
-    data['max_distance'] = max_distance
-    data['bound_length'] = bound_length
-    data['num_nodes'] = num_nodes
-    data['num_depots'] = num_depots
-    
-    #depots will always be the first k=num_depots nodes
-    for i in range(num_depots):
-        data['x'][i] = depotcoords[i]
-        data['y'][i] = depotcoords[i]
-        
-    #construct distance matrix based on current depot
-    data['distance_matrix'] = vrp.get_dist_mat(data,data['num_nodes'])
-    
-    #make penalty of each node larger than the maximum possible total sum of distances
-    data['penalty'] = int(np.sqrt(2)*(bound_length)*num_nodes)
-    
-    #assign vehicles starts and ends num_vehicles at a time, start with 1 vehicle per node
-    data['starts'] = [i for i in range(num_depots)]
-    data['ends'] = [i for i in range(num_depots)]
-    
-    #initial number of vehicles is the same as number of depots (1 vehicle per depot)
-    data['num_vehicles'] = num_depots
-    #num_vehicles_depot is number of vehicles per depot
-    data['num_vehicles_depot'] = 1
-    
-    marginal_utilities = []
-    total_utilities = []
-    nodes_per_trip = []
-    costs = []
-    
-    #while loop to find the number of vehicles that maximizes the total utility of drones (nodes visited)
-    prev_max_dist = 0
-    prev_total_visited = 0
-    prev_total_trips = 0
-    prev_cost = 0
-    prev_visited_nodes = None
-    prevmanager = None
-    prevrouting = None
-    prevsolution = None
-    used_vehicles = 1
-    manager, routing, solution = vrp.solvemulti(data)
-    if(routing == None):
-        print("solution not found...")
-        return None
-    total_visited, visited_nodes, total_trips, new_used_vehicles = vrp.get_visited(data, manager, routing, solution)
-    max_dist, cost = vrp.get_max_dist(data, manager, routing, solution)
-    total_utilities.append(total_visited)
-    marginal_utilities.append(total_visited - prev_total_visited)
-    nodes_per_trip.append((float(total_visited))/total_trips)
-    costs.append(cost)   
-            
-    while((total_visited > prev_total_visited)):
-        prev_total_visited = total_visited
-        prev_visited_nodes = visited_nodes
-        prev_total_trips = total_trips
-        prev_max_dist = max_dist
-        prev_cost = cost
-        #print(*prev_visited_nodes)
-        prevmanager = manager
-        prevrouting = routing
-        prevsolution = solution
-        
-        print("Total Cost of Solution:", cost)
-        print("Total Number of Vehicles Available Per Depot:", data['num_vehicles_depot'])
-        print("Total Number of Vehicles Needed:", used_vehicles)
-        print("Max Distance Traveled by any Vehicle:", max_dist)
-        print("Max Possible Number of Vehicle Trips:", data['num_vehicles'])
-        print("Total Number of Trips", total_trips)
-        print("Number of nodes visited per trip:", nodes_per_trip[-1], "\n")
-        
-        graph_solution(data, prevmanager, prevrouting, prevsolution, prev_visited_nodes, marginal_utilities, total_utilities, nodes_per_trip, costs)
- 
-        #increase number of vehicles PER DEPOT by 1, reflect change in total number of vehicles
-        data['num_vehicles'] = data['num_vehicles'] + num_depots
-        data['num_vehicles_depot'] += 1
-        
+        data['num_vehicles_depot'] += 1      
+        data['penalty'] = math.ceil(prev_max_dist)
         #modify starts and ends to reflect the larger number of vehicles
         newstarts = []
         newends = []
@@ -440,16 +294,198 @@ def main():
         del newstarts
         del newends 
         
-        manager, routing, solution = vrp.solvemulti(data)
+        manager, routing, solution = vrp.solvemulti_nodistlim(data)
         if(routing == None):
-            print("solution not found...")
+            print("solution not found...\n")
             break
-        total_visited, visited_nodes, total_trips, new_used_vehicles = vrp.get_visited(data, manager, routing, solution) 
+        total_visited, visited_nodes, total_trips, new_used_vehicles = vrp.get_visited(data, manager, routing, solution)
         max_dist, cost = vrp.get_max_dist(data, manager, routing, solution)
-        total_utilities.append(total_visited)
-        marginal_utilities.append(total_visited - prev_total_visited)
-        nodes_per_trip.append((float(total_visited))/total_trips)
-        costs.append(cost)         
+        #total_utilities.append(total_visited)
+        #marginal_utilities.append(total_visited - prev_total_visited)
+        nodes_per_trip.append((float(total_visited))/total_trips) 
+        max_dists.append(max_dist)
+        costs.append((cost+(1000*max_dist))/1000.0)
+        
+        itervar += 1
+    
+    """
+    graph_solution(data, manager, routing, solution, visited_nodes, nodes_per_trip, max_dists)
+    print("Total Number of Vehicles Needed:", data['num_vehicles_depot'])
+    print("Max Distance Traveled by any Vehicle:", max_dist)
+    print("Max Possible Number of Vehicle Trips:", data['num_vehicles'])
+    print("Total Number of Trips", total_trips)
+    print("Number of nodes visited per trip:", nodes_per_trip[-1], "\n")
+    """
+         
+    #since we checked one vehicle above the optimal, best solution # of vehicles is 1 less than current.
+    data['num_vehicles_depot'] = data['num_vehicles_depot'] - 1
+    data['num_vehicles'] = data['num_vehicles'] - num_depots
+        
+    total_nodes_visited = prev_total_visited
+    total_trips = prev_total_trips
+    total_vehicles = data['num_vehicles_depot']
+    max_dist = prev_max_dist
+    used_vehicles = max(used_vehicles, new_used_vehicles)
+                    
+    #plt.plot(data['x'],data['y'],'ko',markersize=10)
+    #plt.show()
+    #pdb.set_trace()
+    
+    print("Total Cost of Overall Solution:", cost+(1000*max_dist)) 
+    print("Overall Total Number of Vehicles Available Per Depot:", total_vehicles)
+    print("Overall Total Number of Vehicles Needed:", used_vehicles)
+    print("Final Max Distance Traveled by any Vehicle:", max_dist)
+    print("Overall Max Possible Number of Vehicle Trips:", data['num_vehicles'])
+    print("Overall Total Number of Trips", total_trips)
+    print("Overall number of nodes visited per vehicle trip:", (float(total_nodes_visited))/total_trips)
+    
+    return max_dist
+
+
+#command line function call
+def main():
+    """Solve the CVRP problem."""
+    if len(sys.argv) != 3:
+        print('Should be called as follows: python vrp_multipledepots.py [density of nodes per unit^2] [number of depots to approximate diagonal road]')
+        return
+    
+    print("Solving for optimal number of vehicles in 100x100 square area based on max distance traveled by any one vehicle.\n")
+    
+    density = float(sys.argv[1])
+    bound_length = 100
+    num_depots = int(sys.argv[2])
+    num_nodes = int((bound_length*bound_length)*density) + num_depots
+    
+    #create depot coordinates along the line y=x in the square region
+    depotcoords = np.linspace(0, bound_length, num_depots, dtype = 'int32').tolist()
+    
+    #create data for problem
+    data = {}
+    data['x'] = np.random.randint(low=0,high=bound_length,size=num_nodes).tolist()
+    data['y'] = np.random.randint(low=0,high=bound_length,size=num_nodes).tolist()
+    
+    #put params in data
+    data['bound_length'] = bound_length
+    data['num_nodes'] = num_nodes
+    data['num_depots'] = num_depots
+    
+    #depots will always be the first k=num_depots nodes
+    for i in range(num_depots):
+        data['x'][i] = depotcoords[i]
+        data['y'][i] = depotcoords[i]
+        
+    #construct distance matrix based on current depot
+    data['distance_matrix'] = vrp.get_dist_mat(data,data['num_nodes'])
+    
+    #assign vehicles starts and ends num_vehicles at a time, start with 1 vehicle per node
+    data['starts'] = [i for i in range(num_depots)]
+    data['ends'] = [i for i in range(num_depots)]
+    
+    #initial number of vehicles is the same as number of depots (1 vehicle per depot)
+    data['num_vehicles'] = num_depots
+    
+    #num_vehicles_depot is number of vehicles per depot
+    data['num_vehicles_depot'] = 1
+    
+    #make penalty of each node larger than the maximum possible total sum of distances, divided by number of vehicles per depot
+    data['penalty'] = math.ceil(np.sqrt(2)*(bound_length)*num_nodes)
+    
+    #marginal_utilities = []
+    #total_utilities = []
+    nodes_per_trip = []
+    max_dists = []
+    costs = []
+            
+    #while loop to find the number of vehicles that maximizes the total utility of drones (nodes visited)
+    #set prev_max_dist to max possible value since we cannot have a max dist higher than the "penalty"
+    prev_max_dist = data['penalty']
+    prev_total_visited = 0
+    prev_total_trips = 0
+    prev_cost = 0
+    prev_visited_nodes = None
+    prevmanager = None
+    prevrouting = None
+    prevsolution = None
+    used_vehicles = 1
+    manager, routing, solution = vrp.solvemulti_nodistlim(data)
+    if(routing == None):
+        print("solution not found...\n")
+        return None
+    total_visited, visited_nodes, total_trips, new_used_vehicles = vrp.get_visited(data, manager, routing, solution)
+    max_dist, cost = vrp.get_max_dist(data, manager, routing, solution)
+    #total_utilities.append(total_visited)
+    #marginal_utilities.append(total_visited - prev_total_visited)
+    nodes_per_trip.append((float(total_visited))/total_trips) 
+    max_dists.append(max_dist)
+    costs.append((cost+(100*max_dist))/100.0)
+       
+    itervar = 0         
+    while((max_dist < prev_max_dist)):
+    #while(itervar < 10 and (manager != None)):
+        prev_total_visited = total_visited
+        prev_visited_nodes = visited_nodes
+        prev_total_trips = total_trips
+        prev_max_dist = max_dist
+        prev_cost = cost
+        #print(*prev_visited_nodes)
+        prevmanager = manager
+        prevrouting = routing
+        prevsolution = solution
+        
+        if(new_used_vehicles > used_vehicles):
+            used_vehicles = new_used_vehicles
+        
+        print("Total Cost of Solution:", cost+(100*max_dist))
+        print("Total Number of Vehicles Available Per Depot:", data['num_vehicles_depot'])
+        print("Total Number of Vehicles Needed:", used_vehicles)
+        print("Max Distance Traveled by any Vehicle:", max_dist)
+        print("Max Possible Number of Vehicle Trips:", data['num_vehicles'])
+        print("Total Number of Trips", total_trips)
+        print("Number of nodes visited per trip:", nodes_per_trip[-1], "\n")
+        
+        graph_solution(data, prevmanager, prevrouting, prevsolution, prev_visited_nodes, nodes_per_trip, max_dists, costs)
+ 
+        #increase number of vehicles PER DEPOT by 1, reflect change in total number of vehicles
+        data['num_vehicles'] = data['num_vehicles'] + num_depots
+        data['num_vehicles_depot'] += 1      
+        data['penalty'] = math.ceil(prev_max_dist)
+        #modify starts and ends to reflect the larger number of vehicles
+        newstarts = []
+        newends = []
+        
+        for i in range(num_depots):
+            for j in range(data['num_vehicles_depot']):
+                newstarts.append(i)
+                newends.append(i)
+        
+        data['starts'] = newstarts
+        data['ends'] = newends
+        
+        del newstarts
+        del newends 
+        
+        manager, routing, solution = vrp.solvemulti_nodistlim(data)
+        if(routing == None):
+            print("solution not found...\n")
+            break
+        total_visited, visited_nodes, total_trips, new_used_vehicles = vrp.get_visited(data, manager, routing, solution)
+        max_dist, cost = vrp.get_max_dist(data, manager, routing, solution)
+        #total_utilities.append(total_visited)
+        #marginal_utilities.append(total_visited - prev_total_visited)
+        nodes_per_trip.append((float(total_visited))/total_trips) 
+        max_dists.append(max_dist)
+        costs.append((cost+(100*max_dist))/100.0)
+        
+        itervar += 1
+    
+    """
+    graph_solution(data, manager, routing, solution, visited_nodes, nodes_per_trip, max_dists)
+    print("Total Number of Vehicles Needed:", data['num_vehicles_depot'])
+    print("Max Distance Traveled by any Vehicle:", max_dist)
+    print("Max Possible Number of Vehicle Trips:", data['num_vehicles'])
+    print("Total Number of Trips", total_trips)
+    print("Number of nodes visited per trip:", nodes_per_trip[-1], "\n")
+    """
          
     #since we checked one vehicle above the optimal, best solution # of vehicles is 1 less than current.
     data['num_vehicles_depot'] = data['num_vehicles_depot'] - 1
@@ -464,8 +500,9 @@ def main():
     #plt.plot(data['x'],data['y'],'ko',markersize=10)
     #plt.show()
     #pdb.set_trace()
-      
-    print("Total Cost of Overall Solution:", cost) 
+    
+    
+    print("Total Cost of Overall Solution:", cost+(1000*max_dist)) 
     print("Overall Total Number of Vehicles Available Per Depot:", total_vehicles)
     print("Overall Total Number of Vehicles Needed:", used_vehicles)
     print("Final Max Distance Traveled by any Vehicle:", max_dist)
