@@ -158,6 +158,36 @@ def get_visited(data, manager, routing, solution):
         
     return total_visited, visited_nodes, num_trips, max(used_vehicles)
 
+def print_solution(data, manager, routing, solution):
+    route_distances = []
+    """Prints solution on console."""
+    print("\n---------\n")
+    max_route_distance = 0
+    for vehicle_id in range(data['num_vehicles']):
+        index = routing.Start(vehicle_id)
+        plan_output = 'Route for vehicle {}:\n'.format(vehicle_id+1)
+        #route_distance = 0 - data['vehiclepenalty']
+        route_distance = 0
+        while not routing.IsEnd(index):
+            plan_output += ' {} -> '.format(manager.IndexToNode(index))
+            previous_index = index
+            index = solution.Value(routing.NextVar(index))
+            route_distance += routing.GetArcCostForVehicle(
+                previous_index, index, vehicle_id)
+        plan_output += '{}\n'.format(manager.IndexToNode(index))
+        #if(route_distance != 0 - data['vehiclepenalty']):
+        if(route_distance != 0):
+            plan_output += 'Distance of the route: {}\n'.format(route_distance)
+        else:
+            plan_output += 'Distance of the route: {}\n'.format(0)
+        
+        print(plan_output)
+        route_distances.append(route_distance)
+
+        max_route_distance = max(route_distance, max_route_distance)
+    print('Maximum of the route distances: {}m'.format(max_route_distance))
+    return route_distances
+
 
 #returns euclidean distance between two points
 def getdist(x1, y1, x2, y2):
@@ -177,15 +207,14 @@ def get_dist_mat(data,num_nodes):
     return dist_mat.tolist()
 
 
-def multidepot_tu(dens, num_dpts, distlim, xcoords, ycoords, dptcoords):
+def multidepot_tu(numnodes, num_dpts, distlim, xcoords, ycoords, dptcoords):
     """Solve the CVRP problem."""
     
-    print("Solving for optimal number of vehicles in 100x100 square area based on total utility of next vehicle.\n")
+    print("Solving for optimal number of vehicles in 1000x1000 square area based on total utility of next vehicle.\n")
     
-    density = float(dens)
-    bound_length = 100
+    num_nodes = int(sys.argv[1])
+    bound_length = 1000
     num_depots = int(num_dpts)
-    num_nodes = int((bound_length*bound_length)*density) + num_depots
     max_distance = int(distlim)
     
     #create depot coordinates along the line y=x in the square region
@@ -226,8 +255,11 @@ def multidepot_tu(dens, num_dpts, distlim, xcoords, ycoords, dptcoords):
     total_utilities = []
     nodes_per_trip = []
     costs = []
-            
-    #while loop to find the number of vehicles that maximizes the total utility of drones (nodes visited)
+
+    routedistances = []
+    used_vehicles_actual = 0
+    
+    #while loop to find the number of vehicles that maximizes the total utility of drones (nodes visited) 
     prev_max_dist = 0
     prev_total_visited = 0
     prev_total_trips = 0
@@ -236,12 +268,11 @@ def multidepot_tu(dens, num_dpts, distlim, xcoords, ycoords, dptcoords):
     prevmanager = None
     prevrouting = None
     prevsolution = None
-    used_vehicles = 1
     manager, routing, solution = vrp.solvemulti(data)
     if(routing == None):
         print("solution not found...")
         return None
-    total_visited, visited_nodes, total_trips, new_used_vehicles = vrp.get_visited(data, manager, routing, solution)
+    total_visited, visited_nodes, total_trips, used_vehicles = vrp.get_visited(data, manager, routing, solution)
     max_dist, cost = vrp.get_max_dist(data, manager, routing, solution)
     total_utilities.append(total_visited)
     marginal_utilities.append(total_visited - prev_total_visited)
@@ -249,7 +280,6 @@ def multidepot_tu(dens, num_dpts, distlim, xcoords, ycoords, dptcoords):
     costs.append(cost)   
             
     while((total_visited > prev_total_visited)):
-    #while(total_visited < num_nodes - num_depots):
         prev_total_visited = total_visited
         prev_visited_nodes = visited_nodes
         prev_total_trips = total_trips
@@ -260,9 +290,6 @@ def multidepot_tu(dens, num_dpts, distlim, xcoords, ycoords, dptcoords):
         prevrouting = routing
         prevsolution = solution
         
-        if(new_used_vehicles > used_vehicles):
-            used_vehicles = new_used_vehicles
-        
         print("Total Cost of Solution:", cost)
         print("Total Number of Vehicles Available Per Depot:", data['num_vehicles_depot'])
         print("Total Number of Vehicles Needed:", used_vehicles)
@@ -271,6 +298,9 @@ def multidepot_tu(dens, num_dpts, distlim, xcoords, ycoords, dptcoords):
         print("Total Number of Trips", total_trips)
         print("Number of nodes visited per trip:", nodes_per_trip[-1], "\n")
         
+        routedistances = print_solution(data, manager, routing, solution)
+        used_vehicles_actual = used_vehicles
+
         graph_solution(data, prevmanager, prevrouting, prevsolution, prev_visited_nodes, marginal_utilities, total_utilities, nodes_per_trip, costs)
  
         #increase number of vehicles PER DEPOT by 1, reflect change in total number of vehicles
@@ -290,18 +320,19 @@ def multidepot_tu(dens, num_dpts, distlim, xcoords, ycoords, dptcoords):
         data['ends'] = newends
         
         del newstarts
-        del newends
+        del newends 
         
         manager, routing, solution = vrp.solvemulti(data)
         if(routing == None):
             print("solution not found...")
             break
-        total_visited, visited_nodes, total_trips, new_used_vehicles = vrp.get_visited(data, manager, routing, solution) 
+
+        total_visited, visited_nodes, total_trips, used_vehicles = vrp.get_visited(data, manager, routing, solution) 
         max_dist, cost = vrp.get_max_dist(data, manager, routing, solution)
         total_utilities.append(total_visited)
         marginal_utilities.append(total_visited - prev_total_visited)
         nodes_per_trip.append((float(total_visited))/total_trips)
-        costs.append((cost+(100*max_dist))/100.0)         
+        costs.append(cost)         
          
     #since we checked one vehicle above the optimal, best solution # of vehicles is 1 less than current.
     data['num_vehicles_depot'] = data['num_vehicles_depot'] - 1
@@ -311,7 +342,6 @@ def multidepot_tu(dens, num_dpts, distlim, xcoords, ycoords, dptcoords):
     total_trips = prev_total_trips
     total_vehicles = data['num_vehicles_depot']
     max_dist = prev_max_dist
-    used_vehicles = max(used_vehicles, new_used_vehicles)
                 
     #plt.plot(data['x'],data['y'],'ko',markersize=10)
     #plt.show()
@@ -319,25 +349,28 @@ def multidepot_tu(dens, num_dpts, distlim, xcoords, ycoords, dptcoords):
       
     print("Total Cost of Overall Solution:", cost) 
     print("Overall Total Number of Vehicles Available Per Depot:", total_vehicles)
-    print("Overall Total Number of Vehicles Needed:", used_vehicles)
+    print("Overall Total Number of Vehicles Needed:", used_vehicles_actual)
     print("Final Max Distance Traveled by any Vehicle:", max_dist)
     print("Overall Max Possible Number of Vehicle Trips:", data['num_vehicles'])
     print("Overall Total Number of Trips", total_trips)
     print("Overall number of nodes visited per vehicle trip:", (float(total_nodes_visited))/total_trips)
 
+    print(*routedistances)
+
+    return routedistances, used_vehicles_actual
+
 #function called from command line
 def main():
     """Solve the CVRP problem."""
     if len(sys.argv) != 4:
-        print('Should be called as follows: python vrp_multipledepots.py [density of nodes per unit^2] [number of depots to approximate diagonal road] [range of drone on a single charge]')
+        print('Should be called as follows: python vrp_multipledepot_tu.py [number of waypoints] [number of depots to approximate diagonal road] [range of drone on a single charge]')
         return
     
-    print("Solving for optimal number of vehicles in 100x100 square area based on total utility of next vehicle.\n")
+    print("Solving for optimal number of vehicles in 1000x1000 square area based on total utility of next vehicle.\n")
     
-    density = float(sys.argv[1])
-    bound_length = 100
+    num_nodes = int(sys.argv[1])
+    bound_length = 1000
     num_depots = int(sys.argv[2])
-    num_nodes = int((bound_length*bound_length)*density) + num_depots
     max_distance = int(sys.argv[3])
     
     #create depot coordinates along the line y=x in the square region
@@ -378,8 +411,11 @@ def main():
     total_utilities = []
     nodes_per_trip = []
     costs = []
+
+    routedistances = []
+    used_vehicles_actual = 0
     
-    #while loop to find the number of vehicles that maximizes the total utility of drones (nodes visited)
+    #while loop to find the number of vehicles that maximizes the total utility of drones (nodes visited) 
     prev_max_dist = 0
     prev_total_visited = 0
     prev_total_trips = 0
@@ -388,12 +424,11 @@ def main():
     prevmanager = None
     prevrouting = None
     prevsolution = None
-    used_vehicles = 1
     manager, routing, solution = vrp.solvemulti(data)
     if(routing == None):
         print("solution not found...")
         return None
-    total_visited, visited_nodes, total_trips, new_used_vehicles = vrp.get_visited(data, manager, routing, solution)
+    total_visited, visited_nodes, total_trips, used_vehicles = vrp.get_visited(data, manager, routing, solution)
     max_dist, cost = vrp.get_max_dist(data, manager, routing, solution)
     total_utilities.append(total_visited)
     marginal_utilities.append(total_visited - prev_total_visited)
@@ -419,6 +454,9 @@ def main():
         print("Total Number of Trips", total_trips)
         print("Number of nodes visited per trip:", nodes_per_trip[-1], "\n")
         
+        routedistances = print_solution(data, manager, routing, solution)
+        used_vehicles_actual = used_vehicles
+
         graph_solution(data, prevmanager, prevrouting, prevsolution, prev_visited_nodes, marginal_utilities, total_utilities, nodes_per_trip, costs)
  
         #increase number of vehicles PER DEPOT by 1, reflect change in total number of vehicles
@@ -444,7 +482,8 @@ def main():
         if(routing == None):
             print("solution not found...")
             break
-        total_visited, visited_nodes, total_trips, new_used_vehicles = vrp.get_visited(data, manager, routing, solution) 
+
+        total_visited, visited_nodes, total_trips, used_vehicles = vrp.get_visited(data, manager, routing, solution) 
         max_dist, cost = vrp.get_max_dist(data, manager, routing, solution)
         total_utilities.append(total_visited)
         marginal_utilities.append(total_visited - prev_total_visited)
@@ -459,7 +498,6 @@ def main():
     total_trips = prev_total_trips
     total_vehicles = data['num_vehicles_depot']
     max_dist = prev_max_dist
-    used_vehicles = max(used_vehicles, new_used_vehicles)
                 
     #plt.plot(data['x'],data['y'],'ko',markersize=10)
     #plt.show()
@@ -467,11 +505,13 @@ def main():
       
     print("Total Cost of Overall Solution:", cost) 
     print("Overall Total Number of Vehicles Available Per Depot:", total_vehicles)
-    print("Overall Total Number of Vehicles Needed:", used_vehicles)
+    print("Overall Total Number of Vehicles Needed:", used_vehicles_actual)
     print("Final Max Distance Traveled by any Vehicle:", max_dist)
     print("Overall Max Possible Number of Vehicle Trips:", data['num_vehicles'])
     print("Overall Total Number of Trips", total_trips)
     print("Overall number of nodes visited per vehicle trip:", (float(total_nodes_visited))/total_trips)
+
+    print(*routedistances)
         
 
 

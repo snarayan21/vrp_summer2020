@@ -390,7 +390,7 @@ def get_visited(data, manager, routing, solution):
     return total_visited, visited_nodes, num_trips, max(used_vehicles)
 
 def getdist(x1, y1, x2, y2):
-    return np.sqrt(((abs(x1-x2))**2) + ((abs(y1-y2))**2))
+    return int(np.ceil(np.sqrt(((abs(x1-x2))**2) + ((abs(y1-y2))**2))))
         
 def get_dist_mat(data,num_nodes):
     #return euclidean distance matrix
