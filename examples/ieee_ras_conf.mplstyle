@@ -1,0 +1,21 @@
+# Override default Matplotlib matplotlibrc text preferences to ensure IEEE font
+# compliance. Latex will be used for rendering, which will result in font
+# families matching the IEEE Latex class file. See the documentation on
+# matplotlibrc files for information about these and other available options.
+# The IEEE figure caption font size is 8, which is reasonable for labels.
+#
+# If Latex is not available, text.usetex may be set to False.
+
+font.family : serif
+font.serif : Times
+font.size : 8               # Default font size.
+font.weight : normal
+
+axes.titlesize : medium     # Numeric value of 'medium' for same as default font size.
+
+legend.fontsize : medium    # Numeric value of 'medium' for same as default font size.
+
+text.usetex : True          # Render fonts using Latex.
+
+pdf.fonttype : 42           # Use TrueType fonts and not Type 3 fonts.
+ps.fonttype : 42
